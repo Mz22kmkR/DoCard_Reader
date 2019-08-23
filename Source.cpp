@@ -1,21 +1,18 @@
 #include <stdio.h>
-
 #include "felicalib.h"
 
-static void suica_dump_history(uint8 *data);
+static void docard_dump_history(uint8 *data);
 static const char *consoleType(int ctype);
 static const char *procType(int proc);
 static int read4b(uint8 *p);
 static int read2b(uint8 *p);
 
-// ƒT[ƒrƒXƒR[ƒh
-#define SERVICE_SUICA_INOUT     0x108f
-#define SERVICE_DOCARD_HISTORY   0x010f	//90
+// ã‚µãƒ¼ãƒ“ã‚¹ã‚³ãƒ¼ãƒ‰
+#define SERVICE_DOCARD_HISTORY  0x010f
 #define SERVICE_DOCARD_BALANCE	0x008b
 
 
-int _tmain(int argc, _TCHAR *argv[])
-{
+int _tmain(int argc, _TCHAR *argv[]) {
 	pasori *p;
 	felica *f;
 	int i;
@@ -26,10 +23,10 @@ int _tmain(int argc, _TCHAR *argv[])
 	if (!p) {
 		fprintf(stderr, "PaSoRi open failed.\n");
 		exit(1);
-	}
+		}
 	pasori_init(p);
 
-	f = felica_polling(p, 0x8db6, 0, 0);	//POLLING_SUICA
+	f = felica_polling(p, 0x8db6, 0, 0);	//POLLING_DoCard
 	if (!f) {
 		fprintf(stderr, "Polling card failed.\n");
 		exit(1);
@@ -44,13 +41,10 @@ int _tmain(int argc, _TCHAR *argv[])
 	felica_read_without_encryption02(f, 0x008b, 0, (uint8)i, data);
 
 	for (i = 0; ; i++) {
-		if (felica_read_without_encryption02(f, SERVICE_DOCARD_HISTORY, 0, (uint8)i, data))
-		{
+		if (felica_read_without_encryption02(f, SERVICE_DOCARD_HISTORY, 0, (uint8)i, data)) {
 			break;
 		}
-
-		suica_dump_history(data);
-		
+		docard_dump_history(data);
 	}
 
 	felica_free(f);
@@ -59,103 +53,87 @@ int _tmain(int argc, _TCHAR *argv[])
 	return 0;
 }
 
-static void suica_dump_history(uint8 *data)
-{
+static void docard_dump_history(uint8 *data){
 	int proc, date, time, balance, seq, region, use;
 	int in_line, in_sta, out_line, out_sta;
 	int yy, mm, dd;
 
-	proc = data[12];             // ˆ—
-	date = read2b(data + 4);    // “ú•t
-	balance = read2b(data + 14);// c‚
-	//balance = N2HS(balance);
-	use = read2b(data + 9);//[9],[10]
-
-	seq = data[11];
-	//region = seq & 0xff;        // Region
-	//seq >>= 8;                  // ˜A”Ô
+	proc = data[12];             	//å‡¦ç†å†…å®¹
+	date = read2b(data + 4);		//æ—¥ä»˜
+	balance = read2b(data + 14);	//æ®‹é«˜
+	use = read2b(data + 9);			//ä½¿ç”¨é‡‘é¡
+	seq = data[11];					//é€£ç•ª
 
 	out_line = -1;
 	out_sta = -1;
 	time = -1;
 
-	//’Ê‚µ”Ô†(FFˆÈ~‚Í“ä)
-	printf("˜A”Ô:%d ", seq);
+	printf("é€£ç•ª:%d ", seq);
 
-	// “ú•t
+	//æ—¥ä»˜
 	yy = date >> 7;	//7
 	mm = data[0];
 	dd = data[1];
 	printf("%02d/%02d/%02d ", yy, mm, dd);
 
-	printf("ˆ—:%s ", procType(proc));
+	printf("å‡¦ç†å†…å®¹:%s ", procType(proc));
 
-
-
-	// 
-	if (time > 0) {
+	if (time > 0){
 		int hh = time >> 11;
 		int min = (time >> 5) & 0x3f;
 
 		printf(" %02d:%02d ", hh, min);
 	}
-	if (proc == 0x02)
-	{
-	printf("g—p‹àŠz:%d‰~ ", use);
-	}
-	else
-	{
+	if (proc == 0x02){
+	printf("ä½¿ç”¨é‡‘é¡:%då†† ", use);
+	} else {
 		int chage = read2b(data + 8);
-		printf("ƒ`ƒƒ[ƒW‹àŠz:%d‰~ ", chage);
+		printf("ãƒãƒ£ãƒ¼ã‚¸é‡‘é¡:%då†† ", chage);
 	}
-	printf("c‚:%d‰~ ", balance);
+	printf("æ®‹é«˜:%då†† ", balance);
 	printf("\n");
 }
 
-static const char *consoleType(int ctype)
-{
+/********************************************
+ * TODO:									*
+ * 	sonsoleTypeã¨procTypeã®å‡¦ç†å†…å®¹ã‚’èª¿ã¹ã‚‹ã€‚ *
+ ********************************************/
+static const char *consoleType(int ctype){
 	switch (ctype) {
-	case 0x03: return "´Z‹@";
-	case 0x05: return "ÔÚ’[––";
-	case 0x08: return "Œ””„‹@";
-	case 0x0b: return "ÔÚ’[––";
-	case 0x12: return "Œ””„‹@";
-	case 0x16: return "‰üD‹@";
-	case 0x17: return "ŠÈˆÕ‰üD‹@";
-	case 0x18: return "‘‹Œû’[––";
-	case 0x1a: return "‰üD’[––";
-	case 0x1b: return "Œg‘Ñ“d˜b";
-	case 0x1c: return "æŒp´Z‹@";
-	case 0x1d: return "˜A—‰üD‹@";
-	case 0xc7: return "•¨”Ì";
-	case 0xc8: return "©”Ì‹@";
+	case 0x03: return "æ¸…ç®—æ©Ÿ";
+	case 0x05: return "è»Šè¼‰ç«¯æœ«";
+	case 0x08: return "åˆ¸å£²æ©Ÿ";
+	case 0x0b: return "è»Šè¼‰ç«¯æœ«";
+	case 0x12: return "åˆ¸å£²æ©Ÿ";
+	case 0x16: return "æ”¹æœ­æ©Ÿ";
+	case 0x17: return "ç°¡æ˜“æ”¹æœ­æ©Ÿ";
+	case 0x18: return "çª“å£ç«¯æœ«";
+	case 0x1a: return "æ”¹æœ­ç«¯æœ«";
+	case 0x1b: return "æºå¸¯é›»è©±";
+	case 0x1c: return "ä¹—ç¶™æ¸…ç®—æ©Ÿ";
+	case 0x1d: return "é€£çµ¡æ”¹æœ­æ©Ÿ";
+	case 0xc7: return "ç‰©è²©";
+	case 0xc8: return "è‡ªè²©æ©Ÿ";
 	}
 	return "???";
 }
 
-static const char *procType(int proc)
-{
+static const char *procType(int proc){
 	switch (proc) {
-	case 0x01: return "‰^’Àx•¥";
-	case 0x02: return "‰^’Àx•¥";
-	case 0x03: return "Œ”w";
-	case 0x04: return "´Z";
-	case 0x07: return "’èŠúŒ”XV";
-	case 0x15: return "ƒ`ƒƒ[ƒW";
-	case 0x09: return "‰^’Àx•¥";
-	case 0x2d: return "’èŠúŒ”XV";
-	/*case 0x0d: return "ƒoƒX";
-	case 0x0f: return "ƒoƒX";*/
-	case 0x14: return "V‹K”­s";
-	/*case 0x46: return "•¨”Ì";
-	case 0x49: return "“ü‹à";
-	case 0xc6: return "•¨”Ì(Œ»‹à•¹—p)";*/
+	case 0x01: return "é‹è³ƒæ”¯æ‰•";
+	case 0x02: return "é‹è³ƒæ”¯æ‰•";
+	case 0x03: return "åˆ¸è³¼";
+	case 0x04: return "æ¸…ç®—";
+	case 0x07: return "å®šæœŸåˆ¸æ›´æ–°";
+	case 0x15: return "ãƒãƒ£ãƒ¼ã‚¸";
+	case 0x09: return "é‹è³ƒæ”¯æ‰•";
+	case 0x2d: return "å®šæœŸåˆ¸æ›´æ–°";
+	case 0x14: return "æ–°è¦ç™ºè¡Œ";
 	}
 	return "???";
 }
 
-static int read4b(uint8 *p)
-{
+static int read4b(uint8 *p){
 	int v;
 	v = (*p++) << 24;
 	v |= (*p++) << 16;
@@ -164,12 +142,9 @@ static int read4b(uint8 *p)
 	return v;
 }
 
-static int read2b(uint8 *p)
-{
+static int read2b(uint8 *p){
 	int v;
 	v = (*p++) << 8;
 	v |= *p;
 	return v;
 }
-
-
